@@ -1,6 +1,8 @@
 import { Colors } from '@/constants/theme';
 import { restaurants } from '@/services/mockData';
+import { useCartStore } from '@/store/cartStore';
 import * as storage from '@/utils/storage';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
     Alert,
@@ -69,6 +71,8 @@ const initialOrders: Order[] = [
 ];
 
 export default function OrdersScreen() {
+    const router = useRouter();
+    const cartItems = useCartStore((state) => state.items);
     const [orders, setOrders] = useState<Order[]>(initialOrders);
     const [filter, setFilter] = useState<OrderStatus | 'all'>('all');
 
@@ -155,7 +159,20 @@ export default function OrdersScreen() {
 
     return (
         <View style={styles.container}>
-            <Text style={styles.header}>Orders</Text>
+            <View style={styles.headerRow}>
+                <Text style={styles.header}>Orders</Text>
+                {cartItems.length > 0 && (
+                    <TouchableOpacity
+                        style={styles.cartBtn}
+                        onPress={() => router.push('/(user)/checkout')}
+                    >
+                        <Text style={styles.cartIcon}>🛒</Text>
+                        <View style={styles.cartBadge}>
+                            <Text style={styles.badgeText}>{cartItems.length}</Text>
+                        </View>
+                    </TouchableOpacity>
+                )}
+            </View>
 
             <View style={styles.filters}>
                 {(['all', 'draft', 'processing', 'completed'] as const).map((f) => (
@@ -186,13 +203,42 @@ export default function OrdersScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: Colors.light.background },
+    headerRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingTop: 24,
+        paddingBottom: 12,
+    },
     header: {
         fontSize: 22,
         fontWeight: '700',
         color: Colors.light.text,
-        paddingHorizontal: 16,
-        paddingTop: 24,
-        paddingBottom: 12,
+    },
+    cartBtn: {
+        position: 'relative',
+        padding: 8,
+        marginRight: -8,
+    },
+    cartIcon: {
+        fontSize: 24,
+    },
+    cartBadge: {
+        position: 'absolute',
+        top: -2,
+        right: -2,
+        backgroundColor: Colors.light.primary,
+        borderRadius: 10,
+        width: 20,
+        height: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    badgeText: {
+        color: 'white',
+        fontSize: 12,
+        fontWeight: '700',
     },
     filters: { flexDirection: 'row', paddingHorizontal: 12, gap: 8, marginBottom: 8 },
     filterBtn: {
