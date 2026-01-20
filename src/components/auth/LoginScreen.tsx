@@ -42,7 +42,7 @@ export default function LoginScreen() {
             <RoleSelectionCard
               title="Login as Vendor"
               description="Manage your restaurant"
-              color={Colors.accent}
+              color={Colors.light.secondary}
               icon={'🧑‍🍳'}
               onPress={onVendor}
             />
@@ -73,5 +73,5 @@ const styles = StyleSheet.create({
     paddingTop: Theme.spacing.sm,
   },
   bottomLinks: { marginTop: Theme.spacing.md, alignItems: 'center' },
-  link: { color: Colors.textSecondary, marginTop: 8 }
+  link: { color: Colors.text.secondary, marginTop: 8 }
 });

@@ -78,24 +78,3 @@ const Theme = {
 };
 
 export default Theme;
-// Backwards-compatible named export used across the app (Colors.light / Colors.dark)
-// Provide a flattened shape that mirrors prior usage: many files expect
-// `Colors.light.text` to be a color string and `Colors.light.card`,
-// `Colors.light.textSecondary`, `Colors.light.icon` to exist.
-export const Colors = {
-  light: {
-    ...AppColors,
-    // legacy/flattened fields expected by components
-    text: AppColors.text.primary,
-    textSecondary: AppColors.text.secondary,
-    icon: AppColors.text.secondary,
-    card: AppColors.white,
-  },
-  dark: {
-    ...AppColors,
-    text: AppColors.text.primary,
-    textSecondary: AppColors.text.secondary,
-    icon: AppColors.text.secondary,
-    card: AppColors.background,
-  },
-} as const;

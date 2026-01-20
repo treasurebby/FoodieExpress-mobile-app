@@ -1,227 +1,473 @@
-import { Colors } from '@/constants/theme';
-import React, { useMemo, useState } from 'react';
-import { Alert, FlatList, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
-
-type Order = {
-    id: string;
-    customer: string;
-    items: string[];
-    amount: number;
-    status: 'incoming' | 'preparing' | 'ready' | 'out_for_delivery' | 'completed';
-};
+import React, { useState, useMemo } from 'react';
+import {
+  View,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  Alert,
+  Switch,
+} from 'react-native';
+import { DollarSign, TrendingUp, Clock, BarChart2, Package } from 'lucide-react-native';
+import { getMockVendorStats, getMockVendorOrders, getMockVendorProfile } from '@/services/vendorMockData';
 
 export default function VendorDashboard() {
-    // sample initial data
-    const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [incoming, setIncoming] = useState(getMockVendorOrders('new'));
+  const [current, setCurrent] = useState(getMockVendorOrders('preparing'));
 
-    const [incoming, setIncoming] = useState<Order[]>([
-        { id: 'o1', customer: 'Tunde', items: ['Jollof Rice', 'Suya'], amount: 3200, status: 'incoming' },
-        { id: 'o2', customer: 'Amaka', items: ['Shawarma'], amount: 1500, status: 'incoming' },
+  const profile = getMockVendorProfile();
+  const stats = getMockVendorStats();
+
+  const handleBusyModeToggle = (value: boolean) => {
+    setBusy(value);
+    if (value) {
+      Alert.alert('Busy Mode Enabled', 'New orders will be queued with extended prep times.');
+    }
+  };
+
+  function acceptOrder(orderId: string) {
+    const order = incoming.find((o) => o.id === orderId);
+    if (!order) return;
+    setIncoming((prev) => prev.filter((o) => o.id !== orderId));
+    setCurrent((prev) => [{ ...order, status: 'accepted' }, ...prev]);
+  }
+
+  function declineOrder(orderId: string) {
+    Alert.alert('Decline Order', 'Are you sure you want to decline this order?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Decline',
+        style: 'destructive',
+        onPress: () => setIncoming((prev) => prev.filter((o) => o.id !== orderId)),
+      },
     ]);
+  }
 
-    const [current, setCurrent] = useState<Order[]>([
-        { id: 'o3', customer: 'Ibrahim', items: ['Amala & Ewedu'], amount: 2500, status: 'preparing' },
-        { id: 'o4', customer: 'Chioma', items: ['Pepper Soup'], amount: 2000, status: 'ready' },
-    ]);
-
-    const earnings = useMemo(() => {
-        // sum completed + ready/out_for_delivery as today's earnings demo
-        const completedTotal = current
-            .filter((o) => o.status === 'completed' || o.status === 'ready' || o.status === 'out_for_delivery')
-            .reduce((s, o) => s + o.amount, 0);
-        const incomingTotal = incoming.reduce((s, o) => s + o.amount, 0);
-        return completedTotal + incomingTotal + 42500; // base to match example
-    }, [current, incoming]);
-
-    function acceptOrder(orderId: string) {
-        const order = incoming.find((o) => o.id === orderId);
-        if (!order) return;
-        setIncoming((prev) => prev.filter((o) => o.id !== orderId));
-        setCurrent((prev) => [{ ...order, status: 'preparing' }, ...prev]);
-    }
-
-    function declineOrder(orderId: string) {
-        setIncoming((prev) => prev.filter((o) => o.id !== orderId));
-    }
-
-    function advanceStatus(orderId: string) {
-        setCurrent((prev) =>
-            prev.map((o) => {
-                if (o.id !== orderId) return o;
-                if (o.status === 'preparing') return { ...o, status: 'ready' };
-                if (o.status === 'ready') return { ...o, status: 'out_for_delivery' };
-                if (o.status === 'out_for_delivery') return { ...o, status: 'completed' };
-                return o;
-            })
-        );
-    }
-
-    return (
-        <View style={styles.container}>
-            <View style={styles.header}>
-                <Text style={styles.headerTitle}>Today's earnings</Text>
-                <Text style={styles.earnings}>₦{earnings.toLocaleString()}</Text>
-            </View>
-
-            <View style={styles.controls}>
-                <Text style={styles.label}>Busy Mode</Text>
-                <Switch value={busy} onValueChange={setBusy} />
-            </View>
-
-            <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Live incoming orders</Text>
-                <FlatList
-                    data={incoming}
-                    keyExtractor={(i) => i.id}
-                    renderItem={({ item }) => (
-                        <View style={styles.orderCard}>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.orderCustomer}>{item.customer}</Text>
-                                <Text style={styles.orderItems}>{item.items.join(', ')}</Text>
-                                <Text style={styles.orderAmount}>₦{item.amount}</Text>
-                            </View>
-                            <View style={styles.orderActions}>
-                                <TouchableOpacity style={[styles.btn, styles.accept]} onPress={() => acceptOrder(item.id)}>
-                                    <Text style={styles.btnText}>Accept</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={[styles.btn, styles.decline]} onPress={() => declineOrder(item.id)}>
-                                    <Text style={styles.btnText}>Decline</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    )}
-                    ListEmptyComponent={<Text style={styles.empty}>No incoming orders</Text>}
-                />
-            </View>
-
-            <View style={styles.section}> 
-                <Text style={styles.sectionTitle}>Current orders</Text>
-                <FlatList
-                    data={current}
-                    keyExtractor={(i) => i.id}
-                    renderItem={({ item }) => (
-                        <TouchableOpacity style={styles.currentCard} onPress={() => Alert.alert('Advance status', 'Advance order status?', [
-                            { text: 'Cancel' },
-                            { text: 'Advance', onPress: () => advanceStatus(item.id) }
-                        ])}>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.orderCustomer}>{item.customer}</Text>
-                                <Text style={styles.orderItems}>{item.items.join(', ')}</Text>
-                            </View>
-                            <View style={{ alignItems: 'flex-end' }}>
-                                <Text style={styles.status}>{
-                                    item.status === 'preparing' ? 'Preparing' : item.status === 'ready' ? 'Ready' : item.status === 'out_for_delivery' ? 'Out for delivery' : 'Completed'
-                                }</Text>
-                                <Text style={styles.orderAmount}>₦{item.amount}</Text>
-                            </View>
-                        </TouchableOpacity>
-                    )}
-                    ListEmptyComponent={<Text style={styles.empty}>No current orders</Text>}
-                />
-            </View>
-        </View>
+  function advanceStatus(orderId: string) {
+    setCurrent((prev) =>
+      prev.map((o) => {
+        if (o.id !== orderId) return o;
+        if (o.status === 'accepted') return { ...o, status: 'preparing' };
+        if (o.status === 'preparing') return { ...o, status: 'ready' };
+        if (o.status === 'ready') return { ...o, status: 'handed_to_rider' };
+        return o;
+      })
     );
+  }
+
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.greeting}>Good day! 👋</Text>
+          <Text style={styles.subtitle}>{profile.name}</Text>
+        </View>
+        <View style={styles.busyToggle}>
+          <Text style={[styles.busyLabel, busy && styles.busyLabelActive]}>
+            {busy ? 'Busy' : 'Available'}
+          </Text>
+          <Switch
+            value={busy}
+            onValueChange={handleBusyModeToggle}
+            trackColor={{ false: '#ddd', true: '#FF6B35' }}
+            thumbColor={busy ? '#1B5E20' : '#fff'}
+          />
+        </View>
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        {/* Stats Cards */}
+        <View style={styles.statsContainer}>
+          <View style={[styles.statCard, styles.statCardLarge]}>
+            <View style={[styles.statIcon, { backgroundColor: '#E8F5E9' }]}>
+              <DollarSign size={24} color="#1B5E20" />
+            </View>
+            <Text style={styles.statLabel}>Today's Revenue</Text>
+            <Text style={styles.statValue}>₦{stats.todayEarnings.toLocaleString()}</Text>
+            <View style={styles.statTrend}>
+              <TrendingUp size={14} color="#4CAF50" />
+              <Text style={styles.statTrendText}>+12% from yesterday</Text>
+            </View>
+          </View>
+
+          <View style={styles.statsRow}>
+            <View style={styles.statCard}>
+              <View style={[styles.statIcon, { backgroundColor: '#E8F5E9' }]}>
+                <Package size={20} color="#1B5E20" />
+              </View>
+              <Text style={styles.statLabel}>Orders</Text>
+              <Text style={styles.statValue}>{stats.totalOrders}</Text>
+            </View>
+
+            <View style={styles.statCard}>
+              <View style={[styles.statIcon, { backgroundColor: '#E8F5E9' }]}>
+                <BarChart2 size={20} color="#1B5E20" />
+              </View>
+              <Text style={styles.statLabel}>Rating</Text>
+              <Text style={styles.statValue}>{stats.averageRating.toFixed(1)}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Queue Alert */}
+        {profile.currentQueueSize > 0 && (
+          <View style={styles.alertCard}>
+            <Text style={styles.alertTitle}>⚠️ Queue Status</Text>
+            <Text style={styles.alertDesc}>
+              {profile.currentQueueSize} orders in queue ({profile.maxQueueCapacity} max capacity)
+            </Text>
+          </View>
+        )}
+
+        {/* Incoming Orders */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>🔔 Incoming Orders</Text>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{incoming.length}</Text>
+            </View>
+          </View>
+
+          {incoming.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyIcon}>📭</Text>
+              <Text style={styles.emptyText}>No incoming orders</Text>
+              <Text style={styles.emptySubtext}>New orders will appear here</Text>
+            </View>
+          ) : (
+            <View style={styles.ordersList}>
+              {incoming.map((item) => (
+                <View key={item.id} style={styles.orderCard}>
+                  <View style={styles.orderHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.customerName}>{item.customerName}</Text>
+                      <View style={styles.orderTime}>
+                        <Clock size={12} color="#999" />
+                        <Text style={styles.orderTimeText}>{item.items.length} items</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.orderAmount}>₦{item.totalAmount.toLocaleString()}</Text>
+                  </View>
+                  <View style={styles.orderActions}>
+                    <TouchableOpacity
+                      style={[styles.actionBtn, styles.declineBtn]}
+                      onPress={() => declineOrder(item.id)}
+                    >
+                      <Text style={styles.declineBtnText}>Decline</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionBtn, styles.acceptBtn]}
+                      onPress={() => acceptOrder(item.id)}
+                    >
+                      <Text style={styles.acceptBtnText}>Accept</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* Current Orders */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>🔥 Orders in Progress</Text>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{current.length}</Text>
+            </View>
+          </View>
+
+          {current.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyIcon}>✅</Text>
+              <Text style={styles.emptyText}>All caught up!</Text>
+              <Text style={styles.emptySubtext}>No orders being prepared</Text>
+            </View>
+          ) : (
+            <View style={styles.ordersList}>
+              {current.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.currentOrderCard}
+                  onPress={() =>
+                    Alert.alert('Update Status', 'Mark this order as ready for pickup?', [
+                      { text: 'Cancel' },
+                      { text: 'Mark Ready', onPress: () => advanceStatus(item.id) },
+                    ])
+                  }
+                >
+                  <View style={styles.orderHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.customerName}>{item.customerName}</Text>
+                      <Text style={styles.orderTimeText}>{item.items.length} items</Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <View style={styles.statusBadge}>
+                        <Text style={styles.statusBadgeText}>
+                          {item.status === 'accepted' ? 'Accepting' : item.status === 'preparing' ? 'Preparing' : 'Ready'}
+                        </Text>
+                      </View>
+                      <Text style={styles.orderAmount}>₦{item.totalAmount.toLocaleString()}</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+      </ScrollView>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: Colors.light.background,
-        padding: 16,
-    },
-    header: {
-        marginTop: 8,
-        marginBottom: 12,
-    },
-    headerTitle: {
-        fontSize: 14,
-        color: Colors.light.textSecondary,
-    },
-    earnings: {
-        fontSize: 28,
-        color: Colors.light.primary,
-        fontWeight: '700',
-        marginTop: 6,
-    },
-    controls: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 12,
-        paddingHorizontal: 4,
-    },
-    label: {
-        color: Colors.light.text,
-        fontSize: 16,
-    },
-    section: {
-        marginTop: 8,
-        marginBottom: 8,
-        flex: 1,
-    },
-    sectionTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: Colors.light.text,
-        marginBottom: 8,
-    },
-    orderCard: {
-        flexDirection: 'row',
-        backgroundColor: Colors.light.card,
-        padding: 12,
-        borderRadius: 10,
-        marginBottom: 10,
-        alignItems: 'center',
-    },
-    currentCard: {
-        flexDirection: 'row',
-        backgroundColor: Colors.light.card,
-        padding: 12,
-        borderRadius: 10,
-        marginBottom: 10,
-        alignItems: 'center',
-    },
-    orderCustomer: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: Colors.light.text,
-    },
-    orderItems: {
-        color: Colors.light.textSecondary,
-        marginTop: 4,
-    },
-    orderAmount: {
-        color: Colors.light.text,
-        marginTop: 6,
-        fontWeight: '700',
-    },
-    orderActions: {
-        marginLeft: 12,
-        alignItems: 'flex-end',
-    },
-    btn: {
-        paddingVertical: 6,
-        paddingHorizontal: 12,
-        borderRadius: 8,
-        marginBottom: 6,
-    },
-    accept: {
-        backgroundColor: '#00C853',
-    },
-    decline: {
-        backgroundColor: '#F44336',
-    },
-    btnText: {
-        color: '#fff',
-        fontWeight: '600',
-    },
-    empty: {
-        color: Colors.light.textSecondary,
-        textAlign: 'center',
-        marginTop: 12,
-    },
-    status: {
-        color: Colors.light.primary,
-        fontWeight: '700',
-    },
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    paddingTop: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  greeting: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#333',
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#666',
+  },
+  busyToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  busyLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  busyLabelActive: {
+    color: '#FF6B35',
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 100,
+  },
+  statsContainer: {
+    marginBottom: 20,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  statCardLarge: {
+    marginBottom: 12,
+  },
+  statIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  statLabel: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 6,
+    fontWeight: '600',
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#333',
+  },
+  statTrend: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
+  },
+  statTrendText: {
+    fontSize: 12,
+    color: '#4CAF50',
+    fontWeight: '600',
+  },
+  alertCard: {
+    backgroundColor: '#FFF3CD',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF6B35',
+  },
+  alertTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  alertDesc: {
+    fontSize: 12,
+    color: '#666',
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 8,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#333',
+  },
+  badge: {
+    backgroundColor: '#1B5E20',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  badgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  ordersList: {
+    gap: 12,
+  },
+  orderCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF6B35',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  currentOrderCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  orderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  customerName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 4,
+  },
+  orderTime: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  orderTimeText: {
+    fontSize: 12,
+    color: '#999',
+  },
+  orderAmount: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1B5E20',
+    marginTop: 4,
+  },
+  orderActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  actionBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  acceptBtn: {
+    backgroundColor: '#4CAF50',
+  },
+  declineBtn: {
+    backgroundColor: '#f5f5f5',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  acceptBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  declineBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#333',
+  },
+  statusBadge: {
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1B5E20',
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 4,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#999',
+  },
 });

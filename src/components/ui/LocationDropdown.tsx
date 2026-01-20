@@ -1,7 +1,7 @@
-import Colors from '@/constants/colors';
-import Theme from '@/constants/theme';
-import React, { useEffect, useRef, useState } from 'react';
-import { Animated, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Colors } from '@/constants/colors';
+import { MapPin, X } from 'lucide-react-native';
+import React, { useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 type Props = {
   value?: string;
@@ -11,14 +11,7 @@ type Props = {
 
 export default function LocationDropdown({ value, onChange, options = ['Covenant University', 'University of Lagos (UNILAG)', 'University of Ilorin (Unilorin)', 'Other Nigerian University'] }: Props) {
   const [open, setOpen] = useState(false);
-  const anim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.timing(anim, { toValue: open ? 1 : 0, duration: 180, useNativeDriver: true }).start();
-  }, [open, anim]);
-
-  const scale = anim.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] });
-  const opacity = anim;
+  const selectedValue = value ?? options[0];
 
   const handleSelect = (v: string) => {
     onChange?.(v);
@@ -26,53 +19,118 @@ export default function LocationDropdown({ value, onChange, options = ['Covenant
   };
 
   return (
-    <View style={styles.wrapper}>
-      <Pressable onPress={() => setOpen((s) => !s)} style={styles.trigger}>
-        <Text style={styles.triggerText}>{value ?? options[0]}</Text>
-        <Text style={styles.chev}>{open ? '˄' : '˅'}</Text>
+    <>
+      <Pressable onPress={() => setOpen(true)} style={styles.trigger}>
+        <MapPin size={16} color={Colors.light.primary} />
+        <Text style={styles.triggerText}>{selectedValue}</Text>
       </Pressable>
 
-      {open && (
-        <Animated.View style={[styles.menu, { opacity, transform: [{ scale }] }]}>
-          <FlatList
-            data={options}
-            keyExtractor={(i) => i}
-            renderItem={({ item }) => (
-              <Pressable style={styles.option} onPress={() => handleSelect(item)}>
-                <Text style={styles.optionText}>{item}</Text>
+      <Modal
+        visible={open}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setOpen(false)}
+      >
+        <Pressable style={styles.overlay} onPress={() => setOpen(false)}>
+          <View style={styles.menuContainer}>
+            <View style={styles.menuHeader}>
+              <Text style={styles.menuTitle}>Select Location</Text>
+              <Pressable onPress={() => setOpen(false)}>
+                <X size={24} color={Colors.light.text} />
               </Pressable>
-            )}
-          />
-        </Animated.View>
-      )}
-    </View>
+            </View>
+
+            <ScrollView style={styles.menuContent}>
+              {options.map((item) => (
+                <TouchableOpacity
+                  key={item}
+                  style={[
+                    styles.option,
+                    selectedValue === item && styles.optionActive,
+                  ]}
+                  onPress={() => handleSelect(item)}
+                >
+                  <Text
+                    style={[
+                      styles.optionText,
+                      selectedValue === item && styles.optionTextActive,
+                    ]}
+                  >
+                    {item}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: { position: 'relative' },
   trigger: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.sm,
-    borderRadius: Theme.borderRadius.md,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+    gap: 6,
   },
-  triggerText: { color: Colors.text, fontWeight: '600', marginRight: 8 },
-  chev: { color: Colors.textSecondary },
-  menu: {
-    position: 'absolute',
-    right: 0,
-    marginTop: 8,
-    width: 180,
-    backgroundColor: Colors.surface,
-    borderRadius: Theme.borderRadius.md,
-    ...Theme.shadows.card,
-    overflow: 'hidden',
+  triggerText: { 
+    color: Colors.light.primary, 
+    fontWeight: '600', 
+    fontSize: 12,
+    flex: 1,
   },
-  option: { padding: Theme.spacing.md },
-  optionText: { color: Colors.text },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'flex-end',
+  },
+  menuContainer: {
+    backgroundColor: Colors.light.card,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    maxHeight: '70%',
+    paddingTop: 20,
+  },
+  menuHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
+  },
+  menuTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.light.text,
+  },
+  menuContent: {
+    paddingHorizontal: 20,
+  },
+  option: { 
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
+  },
+  optionActive: {
+    backgroundColor: Colors.light.primary + '10',
+    marginHorizontal: -20,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  optionText: { 
+    color: Colors.light.text,
+    fontWeight: '500',
+    fontSize: 15,
+  },
+  optionTextActive: {
+    color: Colors.light.primary,
+    fontWeight: '700',
+  },
 });

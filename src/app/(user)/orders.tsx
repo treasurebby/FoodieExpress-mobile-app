@@ -1,6 +1,12 @@
-import { Colors } from '@/constants/theme';
+import StatusBadge from '@/components/ui/StatusBadge';
+import { Colors } from '@/constants/colors';
+import Theme from '@/constants/theme';
 import { restaurants } from '@/services/mockData';
+import { useCartStore } from '@/store/cartStore';
+import { OrderStatus } from '@/types';
 import * as storage from '@/utils/storage';
+import { useRouter } from 'expo-router';
+import { Clock, MapPin, RefreshCw, Star } from 'lucide-react-native';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
     Alert,
@@ -10,8 +16,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-
-type OrderStatus = 'draft' | 'processing' | 'completed';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface OrderItem {
     id: string;
@@ -28,6 +33,7 @@ interface Order {
     total: number;
     status: OrderStatus;
     createdAt: string;
+    estimatedTime?: string;
 }
 
 const STORAGE_KEY = 'foodie_orders_v1';
@@ -43,6 +49,7 @@ const initialOrders: Order[] = [
         total: 2500,
         status: 'processing',
         createdAt: new Date().toISOString(),
+        estimatedTime: '15 mins',
     },
     {
         id: 'o2',
@@ -63,14 +70,29 @@ const initialOrders: Order[] = [
             { id: 'r3m1', name: 'Amala + Abula', qty: 1, price: 2000 },
         ],
         total: 2000,
-        status: 'draft',
+        status: 'pending',
         createdAt: new Date().toISOString(),
+        estimatedTime: '25 mins',
+    },
+    {
+        id: 'o4',
+        restaurantId: restaurants[3].id,
+        restaurantName: restaurants[3].name,
+        items: [
+            { id: 'r4m1', name: 'Jollof & Grilled Turkey', qty: 1, price: 3200 },
+        ],
+        total: 3200,
+        status: 'completed',
+        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
     },
 ];
 
 export default function OrdersScreen() {
+    const router = useRouter();
+    const insets = useSafeAreaInsets();
+    const { addItem } = useCartStore();
     const [orders, setOrders] = useState<Order[]>(initialOrders);
-    const [filter, setFilter] = useState<OrderStatus | 'all'>('all');
+    const [activeTab, setActiveTab] = useState<'active' | 'past'>('active');
 
     // load persisted orders (if any)
     useEffect(() => {
@@ -98,56 +120,119 @@ export default function OrdersScreen() {
         })();
     }, [orders]);
 
-    const visible = useMemo(() => {
-        if (filter === 'all') return orders;
-        return orders.filter((o) => o.status === filter);
-    }, [orders, filter]);
+    const activeOrders = useMemo(() => {
+        return orders.filter((o) => o.status === 'pending' || o.status === 'processing');
+    }, [orders]);
 
-    function changeStatus(id: string, to: OrderStatus) {
-        setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: to } : o)));
-    }
+    const pastOrders = useMemo(() => {
+        return orders.filter((o) => o.status === 'completed' || o.status === 'cancelled');
+    }, [orders]);
 
-    function onCheckoutDraft(id: string) {
-        Alert.alert('Checkout', 'Place this draft as an order?', [
+    const displayOrders = activeTab === 'active' ? activeOrders : pastOrders;
+
+    function handleReorder(order: Order) {
+        Alert.alert('Reorder', `Add ${order.items.length} item(s) to cart?`, [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Place Order', onPress: () => changeStatus(id, 'processing') },
+            {
+                text: 'Add to Cart',
+                onPress: () => {
+                    order.items.forEach((item) => {
+                        addItem({
+                            id: item.id,
+                            name: item.name,
+                            price: item.price,
+                            quantity: item.qty,
+                            image: 'https://images.unsplash.com/photo-1604329760661-e71dc83f8f26?w=800&q=80',
+                            restaurantId: order.restaurantId,
+                        });
+                    });
+                    Alert.alert('Success', 'Items added to cart!');
+                },
+            },
         ]);
     }
 
-    function onMarkDelivered(id: string) {
-        Alert.alert('Confirm', 'Mark this order as delivered?', [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Yes', onPress: () => changeStatus(id, 'completed') },
-        ]);
+    function handleRateOrder(orderId: string) {
+        Alert.alert('Rate Order', 'Rating feature coming soon!');
+    }
+
+    function handleTrackOrder(orderId: string) {
+        router.push('/(user)/track-order' as any);
     }
 
     function renderOrder({ item }: { item: Order }) {
+        const isActive = item.status === 'pending' || item.status === 'processing';
+
         return (
-            <View style={styles.card}>
-                <View style={styles.rowTop}>
-                    <Text style={styles.restName}>{item.restaurantName}</Text>
-                    <Text style={styles.status}>{item.status.toUpperCase()}</Text>
+            <View style={styles.orderCard}>
+                <View style={styles.orderHeader}>
+                    <View style={styles.orderHeaderLeft}>
+                        <Text style={styles.restaurantName}>{item.restaurantName}</Text>
+                        <Text style={styles.orderDate}>
+                            {new Date(item.createdAt).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                            })}
+                        </Text>
+                    </View>
+                    <StatusBadge status={item.status} />
                 </View>
 
-                {item.items.map((it) => (
-                    <View key={it.id} style={styles.itemRow}>
-                        <Text style={styles.itemName}>{it.name} x{it.qty}</Text>
-                        <Text style={styles.itemPrice}>₦{it.price * it.qty}</Text>
-                    </View>
-                ))}
+                <View style={styles.itemsList}>
+                    {item.items.map((it) => (
+                        <View key={it.id} style={styles.itemRow}>
+                            <Text style={styles.itemName}>
+                                {it.name} x{it.qty}
+                            </Text>
+                            <Text style={styles.itemPrice}>₦{(it.price * it.qty).toLocaleString()}</Text>
+                        </View>
+                    ))}
+                </View>
 
-                <View style={styles.rowBottom}>
-                    <Text style={styles.total}>Total: ₦{item.total}</Text>
-                    {item.status === 'draft' && (
-                        <TouchableOpacity style={styles.actionBtn} onPress={() => onCheckoutDraft(item.id)}>
-                            <Text style={styles.actionText}>Checkout</Text>
-                        </TouchableOpacity>
-                    )}
-                    {item.status === 'processing' && (
-                        <TouchableOpacity style={[styles.actionBtn, styles.secondary]} onPress={() => onMarkDelivered(item.id)}>
-                            <Text style={styles.actionText}>Mark Delivered</Text>
-                        </TouchableOpacity>
-                    )}
+                {isActive && item.estimatedTime && (
+                    <View style={styles.estimatedTimeContainer}>
+                        <Clock size={14} color={Colors.light.primary} />
+                        <Text style={styles.estimatedTime}>Estimated delivery: {item.estimatedTime}</Text>
+                    </View>
+                )}
+
+                <View style={styles.orderFooter}>
+                    <Text style={styles.totalAmount}>Total: ₦{item.total.toLocaleString()}</Text>
+
+                    <View style={styles.orderActions}>
+                        {isActive && (
+                            <TouchableOpacity
+                                style={[styles.actionButton, styles.trackButton]}
+                                onPress={() => handleTrackOrder(item.id)}
+                            >
+                                <MapPin size={16} color="#FFFFFF" />
+                                <Text style={styles.actionButtonText}>Track</Text>
+                            </TouchableOpacity>
+                        )}
+                        {!isActive && item.status === 'completed' && (
+                            <>
+                                <TouchableOpacity
+                                    style={[styles.actionButton, styles.rateButton]}
+                                    onPress={() => handleRateOrder(item.id)}
+                                >
+                                    <Star size={16} color={Colors.light.rating} />
+                                    <Text style={[styles.actionButtonText, { color: Colors.light.rating }]}>
+                                        Rate
+                                    </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.actionButton, styles.reorderButton]}
+                                    onPress={() => handleReorder(item)}
+                                >
+                                    <RefreshCw size={16} color={Colors.light.primary} />
+                                    <Text style={[styles.actionButtonText, { color: Colors.light.primary }]}>
+                                        Reorder
+                                    </Text>
+                                </TouchableOpacity>
+                            </>
+                        )}
+                    </View>
                 </View>
             </View>
         );
@@ -155,29 +240,47 @@ export default function OrdersScreen() {
 
     return (
         <View style={styles.container}>
-            <Text style={styles.header}>Orders</Text>
+            <View style={[styles.headerWrapper, { paddingTop: insets.top + 16 }]}>
+                <Text style={styles.header}>Your Orders</Text>
 
-            <View style={styles.filters}>
-                {(['all', 'draft', 'processing', 'completed'] as const).map((f) => (
+                {/* Tab Switcher */}
+                <View style={styles.tabContainer}>
                     <TouchableOpacity
-                        key={f}
-                        style={[styles.filterBtn, filter === f && styles.filterActive]}
-                        onPress={() => setFilter(f as any)}
+                        style={[styles.tab, activeTab === 'active' && styles.activeTab]}
+                        onPress={() => setActiveTab('active')}
+                        activeOpacity={0.7}
                     >
-                        <Text style={[styles.filterText, filter === f && styles.filterTextActive]}>
-                            {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
+                        <Text style={[styles.tabText, activeTab === 'active' && styles.activeTabText]}>
+                            Active ({activeOrders.length})
                         </Text>
                     </TouchableOpacity>
-                ))}
+                    <TouchableOpacity
+                        style={[styles.tab, activeTab === 'past' && styles.activeTab]}
+                        onPress={() => setActiveTab('past')}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={[styles.tabText, activeTab === 'past' && styles.activeTabText]}>
+                            Past ({pastOrders.length})
+                        </Text>
+                    </TouchableOpacity>
+                </View>
             </View>
 
             <FlatList
-                data={visible}
+                data={displayOrders}
                 keyExtractor={(i) => i.id}
                 renderItem={renderOrder}
-                contentContainerStyle={{ padding: 16, paddingBottom: 48 }}
+                contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 90 }]}
                 ListEmptyComponent={() => (
-                    <View style={styles.empty}><Text style={styles.emptyText}>No orders in this section</Text></View>
+                    <View style={styles.emptyContainer}>
+                        <Text style={styles.emptyIcon}>📦</Text>
+                        <Text style={styles.emptyTitle}>No {activeTab} orders</Text>
+                        <Text style={styles.emptyText}>
+                            {activeTab === 'active'
+                                ? 'Your active orders will appear here'
+                                : 'Your order history will appear here'}
+                        </Text>
+                    </View>
                 )}
             />
         </View>
@@ -185,42 +288,180 @@ export default function OrdersScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: Colors.light.background },
+    container: {
+        flex: 1,
+        backgroundColor: Colors.light.background,
+    },
+    headerWrapper: {
+        paddingHorizontal: 20,
+        paddingBottom: 16,
+        backgroundColor: Colors.light.card,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.light.border,
+    },
     header: {
-        fontSize: 22,
+        fontSize: 28,
+        fontWeight: '800',
+        color: Colors.light.text,
+        letterSpacing: -0.5,
+        marginBottom: 16,
+    },
+    tabContainer: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    tab: {
+        flex: 1,
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        borderRadius: 10,
+        backgroundColor: Colors.light.backgroundAlt,
+        alignItems: 'center',
+    },
+    activeTab: {
+        backgroundColor: Colors.light.primary,
+    },
+    tabText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: Colors.light.textSecondary,
+    },
+    activeTabText: {
+        color: '#FFFFFF',
+    },
+    listContent: {
+        padding: 16,
+    },
+    orderCard: {
+        backgroundColor: Colors.light.card,
+        borderRadius: Theme.borderRadius.medium,
+        padding: 16,
+        marginBottom: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+        elevation: 2,
+    },
+    orderHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 12,
+        paddingBottom: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.light.border,
+    },
+    orderHeaderLeft: {
+        flex: 1,
+    },
+    restaurantName: {
+        fontSize: 16,
         fontWeight: '700',
         color: Colors.light.text,
-        paddingHorizontal: 16,
-        paddingTop: 24,
-        paddingBottom: 12,
+        marginBottom: 4,
     },
-    filters: { flexDirection: 'row', paddingHorizontal: 12, gap: 8, marginBottom: 8 },
-    filterBtn: {
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-        borderRadius: 999,
-        backgroundColor: Colors.light.card,
+    orderDate: {
+        fontSize: 12,
+        color: Colors.light.textSecondary,
     },
-    filterActive: { backgroundColor: Colors.light.primary + '20' },
-    filterText: { color: Colors.light.textSecondary },
-    filterTextActive: { color: Colors.light.primary, fontWeight: '600' },
-    card: {
-        backgroundColor: Colors.light.card,
-        padding: 12,
-        borderRadius: 12,
+    itemsList: {
         marginBottom: 12,
     },
-    rowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    restName: { fontSize: 16, fontWeight: '700', color: Colors.light.text },
-    status: { fontSize: 12, color: Colors.light.textSecondary },
-    itemRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
-    itemName: { color: Colors.light.text },
-    itemPrice: { color: Colors.light.textSecondary },
-    rowBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
-    total: { fontWeight: '700', color: Colors.light.text },
-    actionBtn: { backgroundColor: Colors.light.primary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
-    actionText: { color: 'white', fontWeight: '700' },
-    secondary: { backgroundColor: Colors.light.secondary },
-    empty: { padding: 24, alignItems: 'center' },
-    emptyText: { color: Colors.light.textSecondary },
+    itemRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingVertical: 6,
+    },
+    itemName: {
+        fontSize: 14,
+        color: Colors.light.text,
+        fontWeight: '500',
+        flex: 1,
+    },
+    itemPrice: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: Colors.light.text,
+    },
+    estimatedTimeContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: '#FFF3E0',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 8,
+        marginBottom: 12,
+    },
+    estimatedTime: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#E65100',
+    },
+    orderFooter: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: Colors.light.border,
+    },
+    totalAmount: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: Colors.light.text,
+    },
+    orderActions: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    actionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 8,
+        borderWidth: 1,
+    },
+    trackButton: {
+        backgroundColor: Colors.light.primary,
+        borderColor: Colors.light.primary,
+    },
+    rateButton: {
+        backgroundColor: '#FFF9E6',
+        borderColor: '#FFE57F',
+    },
+    reorderButton: {
+        backgroundColor: Colors.light.backgroundAlt,
+        borderColor: Colors.light.primary,
+    },
+    actionButtonText: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#FFFFFF',
+    },
+    emptyContainer: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 60,
+    },
+    emptyIcon: {
+        fontSize: 64,
+        marginBottom: 16,
+    },
+    emptyTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: Colors.light.text,
+        marginBottom: 8,
+    },
+    emptyText: {
+        fontSize: 14,
+        color: Colors.light.textSecondary,
+        textAlign: 'center',
+        paddingHorizontal: 40,
+    },
 });
